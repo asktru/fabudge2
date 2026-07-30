@@ -43,6 +43,8 @@ export interface Transaction extends Syncable {
     memo: string | null;
     cleared: ClearedStatus;
     transfer_pair_id: string | null;
+    /** Members of one real-world purchase split across categories share this id. */
+    split_group_id: string | null;
 }
 
 export type SyncTableName = 'accounts' | 'category_groups' | 'categories' | 'payees' | 'transactions';

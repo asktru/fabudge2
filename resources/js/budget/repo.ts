@@ -109,6 +109,7 @@ export function createRepo(db: BudgetDatabase) {
                         memo: null,
                         cleared: 'cleared',
                         transfer_pair_id: null,
+                        split_group_id: null,
                         updated_at: nowMs(),
                         deleted_at: null,
                     };
@@ -174,6 +175,7 @@ throw new Error(`Account ${id} not found`);
                     memo: input.memo ?? null,
                     cleared: input.cleared ?? 'uncleared',
                     transfer_pair_id: null,
+                    split_group_id: null,
                     updated_at: nowMs(),
                     deleted_at: null,
                 };
@@ -274,6 +276,7 @@ throw new Error(`Transaction ${id} not found`);
                     category_id: null,
                     memo: input.memo ?? null,
                     transfer_pair_id: pairId,
+                    split_group_id: null,
                     updated_at: nowMs(),
                     deleted_at: null,
                 };

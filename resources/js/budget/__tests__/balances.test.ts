@@ -14,6 +14,7 @@ function transaction(overrides: Partial<Transaction>): Transaction {
         memo: null,
         cleared: 'uncleared',
         transfer_pair_id: null,
+        split_group_id: null,
         updated_at: 1,
         deleted_at: null,
         ...overrides,

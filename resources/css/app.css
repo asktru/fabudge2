@@ -127,6 +127,8 @@
 }
 
 .dark {
+    /* Native controls (date pickers, scrollbars) must follow the theme. */
+    color-scheme: dark;
     --background: hsl(0 0% 3.9%);
     --foreground: hsl(0 0% 98%);
     --card: hsl(0 0% 3.9%);

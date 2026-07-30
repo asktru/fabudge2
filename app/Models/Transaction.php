@@ -11,6 +11,7 @@ namespace App\Models;
  * @property string|null $memo
  * @property string $cleared
  * @property string|null $transfer_pair_id
+ * @property string|null $split_group_id
  */
 class Transaction extends SyncableModel
 {

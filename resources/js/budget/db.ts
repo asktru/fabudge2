@@ -31,6 +31,19 @@ export class BudgetDatabase extends Dexie {
             sync_meta: 'key',
             rates: 'quote',
         });
+
+        this.version(2)
+            .stores({
+                transactions: 'id, account_id, date, payee_id, category_id, transfer_pair_id, split_group_id',
+            })
+            .upgrade((transaction) =>
+                transaction
+                    .table('transactions')
+                    .toCollection()
+                    .modify((row) => {
+                        row.split_group_id ??= null;
+                    }),
+            );
     }
 }
 
