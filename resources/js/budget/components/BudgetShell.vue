@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import AccountFormDialog from './AccountFormDialog.vue';
 import AnalyticsView from './AnalyticsView.vue';
 import BudgetSidebar from './BudgetSidebar.vue';
+import BudgetTabBar from './BudgetTabBar.vue';
 import ManageCategories from './ManageCategories.vue';
 import ManagePayees from './ManagePayees.vue';
 import PlanView from './PlanView.vue';
@@ -26,7 +27,7 @@ const title = computed(() => {
     }
 
     if (current.value.view === 'analytics') {
-        return 'Analytics';
+        return 'Reflect';
     }
 
     if (current.value.view === 'categories') {
@@ -39,7 +40,7 @@ const title = computed(() => {
 
     const accountId = current.value.accountId;
 
-    return accountId === null ? 'All accounts' : (accounts.value.find((account) => account.id === accountId)?.name ?? 'Account');
+    return accountId === null ? 'Spending' : (accounts.value.find((account) => account.id === accountId)?.name ?? 'Account');
 });
 
 function openAccountDialog(account: Account | null) {
@@ -74,7 +75,7 @@ function openAccountDialog(account: Account | null) {
                 </div>
             </header>
 
-            <main class="min-w-0 flex-1 overflow-y-auto">
+            <main class="min-w-0 flex-1 overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
                 <RegisterView
                     v-if="current.view === 'register'"
                     :account-id="current.accountId"
@@ -85,6 +86,8 @@ function openAccountDialog(account: Account | null) {
                 <ManageCategories v-else-if="current.view === 'categories'" />
                 <ManagePayees v-else-if="current.view === 'payees'" />
             </main>
+
+            <BudgetTabBar />
         </SidebarInset>
 
         <AccountFormDialog v-model:open="accountDialogOpen" :account="editingAccount" />

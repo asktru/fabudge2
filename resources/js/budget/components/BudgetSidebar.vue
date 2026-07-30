@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, CalendarRange, ChartColumn, Landmark, List, Plus, Shapes, Users } from '@lucide/vue';
+import { ArrowLeft, Landmark, Plus, Shapes, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import { accountBalances, totalInBase } from '@/budget/balances';
 import { useBudget } from '@/budget/context';
 import { formatMoney } from '@/budget/money';
+import { activeTabId, budgetTabs } from '@/budget/navigation';
 import type { Account, RateRow, Transaction } from '@/budget/types';
 import { useLive } from '@/budget/useLive';
 import {
@@ -74,26 +75,17 @@ function isCurrentAccount(accountId: string | null): boolean {
         </SidebarHeader>
 
         <SidebarContent>
-            <SidebarGroup>
+            <!-- The mobile tab bar already covers these sections. -->
+            <SidebarGroup class="hidden md:block">
                 <SidebarGroupContent>
                     <SidebarMenu>
-                        <SidebarMenuItem>
-                            <SidebarMenuButton :is-active="current.view === 'plan'" data-testid="nav-plan" @click="go({ view: 'plan' })">
-                                <CalendarRange /> Plan
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
+                        <SidebarMenuItem v-for="tab in budgetTabs" :key="tab.id">
                             <SidebarMenuButton
-                                :is-active="current.view === 'analytics'"
-                                data-testid="nav-analytics"
-                                @click="go({ view: 'analytics' })"
+                                :is-active="activeTabId(current) === tab.id"
+                                :data-testid="`nav-${tab.id}`"
+                                @click="go(tab.view)"
                             >
-                                <ChartColumn /> Analytics
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
-                            <SidebarMenuButton :is-active="isCurrentAccount(null)" @click="go({ view: 'register', accountId: null })">
-                                <List /> All accounts
+                                <component :is="tab.icon" /> {{ tab.label }}
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     </SidebarMenu>
