@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
+import { ArrowRight, Wallet } from '@lucide/vue';
 import PendingInvitationsModal from '@/components/PendingInvitationsModal.vue';
-import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
-import { dashboard } from '@/routes';
+import { budget, dashboard } from '@/routes';
 import type { DashboardInvitation, Team } from '@/types';
 
 defineProps<{
@@ -31,30 +31,22 @@ defineOptions({
         :invitations="pendingInvitations"
     />
 
-    <div
-        class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
-        <div class="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div
-                class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-            >
-                <PlaceholderPattern />
-            </div>
-            <div
-                class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-            >
-                <PlaceholderPattern />
-            </div>
-            <div
-                class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-            >
-                <PlaceholderPattern />
-            </div>
-        </div>
-        <div
-            class="relative min-h-[100vh] flex-1 rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border"
+    <div class="flex h-full flex-1 flex-col gap-4 p-4">
+        <Link
+            v-if="$page.props.currentTeam"
+            :href="budget($page.props.currentTeam.slug).url"
+            class="group flex max-w-xl items-center gap-4 rounded-xl border border-sidebar-border/70 p-6 transition-colors hover:bg-accent dark:border-sidebar-border"
         >
-            <PlaceholderPattern />
-        </div>
+            <div class="flex size-12 items-center justify-center rounded-lg bg-primary/10">
+                <Wallet class="size-6 text-primary" />
+            </div>
+            <div>
+                <div class="text-lg font-semibold">Open your budget</div>
+                <div class="text-sm text-muted-foreground">
+                    Accounts, transactions, and balances — works offline and syncs automatically.
+                </div>
+            </div>
+            <ArrowRight class="ml-auto size-5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </Link>
     </div>
 </template>

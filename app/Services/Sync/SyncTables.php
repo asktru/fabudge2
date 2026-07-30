@@ -72,6 +72,7 @@ class SyncTables
                 'memo' => ['nullable', 'string'],
                 'cleared' => ['required', 'in:uncleared,cleared,reconciled'],
                 'transfer_pair_id' => ['nullable', 'uuid'],
+                'split_group_id' => ['nullable', 'uuid'],
             ],
             default => [],
         };

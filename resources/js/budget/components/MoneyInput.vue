@@ -39,8 +39,8 @@ return Math.abs(amount);
     return amount;
 }
 
-function onInput(event: Event) {
-    text.value = (event.target as HTMLInputElement).value;
+function onInput(value: string | number) {
+    text.value = String(value);
     const parsed = parseAmount(text.value, props.currency);
     model.value = parsed === null ? null : applySign(parsed);
 }
@@ -55,12 +55,12 @@ function onBlur() {
 <template>
     <Input
         :id="id"
-        :value="text"
+        :model-value="text"
         inputmode="decimal"
         autocomplete="off"
         :placeholder="placeholder ?? '0.00'"
         class="text-right tabular-nums"
-        @input="onInput"
+        @update:model-value="onInput"
         @blur="onBlur"
     />
 </template>
