@@ -47,9 +47,28 @@ export interface Transaction extends Syncable {
     split_group_id: string | null;
 }
 
-export type SyncTableName = 'accounts' | 'category_groups' | 'categories' | 'payees' | 'transactions';
+export interface Assignment extends Syncable {
+    category_id: string;
+    /** YYYY-MM */
+    month: string;
+    /** Minor units in the budget's main currency (CAD). */
+    amount: number;
+}
 
-export type SyncableRow = Account | CategoryGroup | Category | Payee | Transaction;
+export type TargetType = 'monthly' | 'by_date' | 'refill';
+
+export interface Target extends Syncable {
+    category_id: string;
+    type: TargetType;
+    /** Minor units in the budget's main currency (CAD). */
+    amount: number;
+    /** YYYY-MM, only for by_date targets. */
+    due_month: string | null;
+}
+
+export type SyncTableName = 'accounts' | 'category_groups' | 'categories' | 'payees' | 'transactions' | 'assignments' | 'targets';
+
+export type SyncableRow = Account | CategoryGroup | Category | Payee | Transaction | Assignment | Target;
 
 export interface OutboxEntry {
     seq?: number;

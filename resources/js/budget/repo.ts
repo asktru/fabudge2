@@ -1,7 +1,7 @@
 import { nowMs, today } from './clock';
 import type { BudgetDatabase } from './db';
 import { newId } from './ids';
-import type { Account, AccountType, Category, CategoryGroup, ClearedStatus, Payee, SyncTableName, Transaction } from './types';
+import type { Account, AccountType, Category, CategoryGroup, ClearedStatus, Payee, SyncTableName, Target, TargetType, Transaction } from './types';
 
 export const STARTING_BALANCE_PAYEE = 'Starting balance';
 
@@ -546,6 +546,97 @@ throw new Error(`Category group ${id} not found`);
                 );
                 await put('categories', members.map((category) => ({ ...category, deleted_at: stamp })));
                 await put('category_groups', [{ ...group, deleted_at: stamp }]);
+            });
+        },
+
+        /** Upsert the amount assigned to a category for a month; 0 tombstones the row. */
+        async setAssignment(categoryId: string, month: string, amountMinor: number): Promise<void> {
+            await db.transaction('rw', [db.assignments, db.outbox], async () => {
+                const existing = (await db.assignments.where('[category_id+month]').equals([categoryId, month]).toArray()).find(
+                    (assignment) => assignment.deleted_at === null,
+                );
+
+                if (existing) {
+                    await put('assignments', [
+                        { ...existing, amount: amountMinor, deleted_at: amountMinor === 0 ? nowMs() : null },
+                    ]);
+                } else if (amountMinor !== 0) {
+                    await put('assignments', [
+                        { id: newId(), category_id: categoryId, month, amount: amountMinor, updated_at: nowMs(), deleted_at: null },
+                    ]);
+                }
+            });
+        },
+
+        /**
+         * Move money between categories for a month; null on either side
+         * means Ready to Assign (which is derived, so only the category
+         * sides get assignment adjustments).
+         */
+        async moveMoney(input: {
+            fromCategoryId: string | null;
+            toCategoryId: string | null;
+            month: string;
+            amountMinor: number;
+        }): Promise<void> {
+            if (input.amountMinor <= 0) {
+                throw new Error('Move amount must be positive');
+            }
+
+            const adjust = async (categoryId: string, delta: number) => {
+                const existing = (await db.assignments.where('[category_id+month]').equals([categoryId, input.month]).toArray()).find(
+                    (assignment) => assignment.deleted_at === null,
+                );
+                const next = (existing?.amount ?? 0) + delta;
+
+                if (existing) {
+                    await put('assignments', [{ ...existing, amount: next, deleted_at: next === 0 ? nowMs() : null }]);
+                } else if (next !== 0) {
+                    await put('assignments', [
+                        { id: newId(), category_id: categoryId, month: input.month, amount: next, updated_at: nowMs(), deleted_at: null },
+                    ]);
+                }
+            };
+
+            await db.transaction('rw', [db.assignments, db.outbox], async () => {
+                if (input.fromCategoryId) {
+                    await adjust(input.fromCategoryId, -input.amountMinor);
+                }
+
+                if (input.toCategoryId) {
+                    await adjust(input.toCategoryId, input.amountMinor);
+                }
+            });
+        },
+
+        /** Create or replace the category's target (one live target per category). */
+        async setTarget(categoryId: string, input: { type: TargetType; amountMinor: number; dueMonth?: string | null }): Promise<void> {
+            await db.transaction('rw', [db.targets, db.outbox], async () => {
+                const existing = (await db.targets.where('category_id').equals(categoryId).toArray()).find(
+                    (target) => target.deleted_at === null,
+                );
+
+                const row: Target = {
+                    id: existing?.id ?? newId(),
+                    category_id: categoryId,
+                    type: input.type,
+                    amount: input.amountMinor,
+                    due_month: input.type === 'by_date' ? (input.dueMonth ?? null) : null,
+                    updated_at: nowMs(),
+                    deleted_at: null,
+                };
+
+                await put('targets', [row]);
+            });
+        },
+
+        async clearTarget(categoryId: string): Promise<void> {
+            await db.transaction('rw', [db.targets, db.outbox], async () => {
+                const existing = (await db.targets.where('category_id').equals(categoryId).toArray()).filter(
+                    (target) => target.deleted_at === null,
+                );
+
+                await put('targets', existing.map((target) => ({ ...target, deleted_at: nowMs() })));
             });
         },
 

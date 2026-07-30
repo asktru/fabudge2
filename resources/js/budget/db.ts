@@ -1,7 +1,7 @@
 import Dexie from 'dexie';
 import type {EntityTable} from 'dexie';
 
-import type { Account, Category, CategoryGroup, OutboxEntry, Payee, RateRow, Transaction } from './types';
+import type { Account, Assignment, Category, CategoryGroup, OutboxEntry, Payee, RateRow, Target, Transaction } from './types';
 
 export interface SyncMetaEntry {
     key: string;
@@ -17,6 +17,8 @@ export class BudgetDatabase extends Dexie {
     outbox!: EntityTable<OutboxEntry, 'seq'>;
     sync_meta!: EntityTable<SyncMetaEntry, 'key'>;
     rates!: EntityTable<RateRow, 'quote'>;
+    assignments!: EntityTable<Assignment, 'id'>;
+    targets!: EntityTable<Target, 'id'>;
 
     constructor(name: string) {
         super(name);
@@ -44,6 +46,11 @@ export class BudgetDatabase extends Dexie {
                         row.split_group_id ??= null;
                     }),
             );
+
+        this.version(3).stores({
+            assignments: 'id, category_id, month, [category_id+month]',
+            targets: 'id, category_id',
+        });
     }
 }
 
