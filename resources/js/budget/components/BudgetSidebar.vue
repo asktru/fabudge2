@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, CalendarRange, Landmark, List, Plus, Shapes, Users } from '@lucide/vue';
+import { ArrowLeft, CalendarRange, ChartColumn, Landmark, List, Plus, Shapes, Users } from '@lucide/vue';
 import { computed } from 'vue';
 import { accountBalances, totalInBase } from '@/budget/balances';
 import { useBudget } from '@/budget/context';
@@ -80,6 +80,15 @@ function isCurrentAccount(accountId: string | null): boolean {
                         <SidebarMenuItem>
                             <SidebarMenuButton :is-active="current.view === 'plan'" data-testid="nav-plan" @click="go({ view: 'plan' })">
                                 <CalendarRange /> Plan
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton
+                                :is-active="current.view === 'analytics'"
+                                data-testid="nav-analytics"
+                                @click="go({ view: 'analytics' })"
+                            >
+                                <ChartColumn /> Analytics
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                         <SidebarMenuItem>
