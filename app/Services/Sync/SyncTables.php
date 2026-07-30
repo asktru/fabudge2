@@ -3,10 +3,12 @@
 namespace App\Services\Sync;
 
 use App\Models\Account;
+use App\Models\Assignment;
 use App\Models\Category;
 use App\Models\CategoryGroup;
 use App\Models\Payee;
 use App\Models\SyncableModel;
+use App\Models\Target;
 use App\Models\Transaction;
 
 /**
@@ -22,6 +24,8 @@ class SyncTables
         'categories' => Category::class,
         'payees' => Payee::class,
         'transactions' => Transaction::class,
+        'assignments' => Assignment::class,
+        'targets' => Target::class,
     ];
 
     public static function isKnown(string $table): bool
@@ -73,6 +77,17 @@ class SyncTables
                 'cleared' => ['required', 'in:uncleared,cleared,reconciled'],
                 'transfer_pair_id' => ['nullable', 'uuid'],
                 'split_group_id' => ['nullable', 'uuid'],
+            ],
+            'assignments' => [
+                'category_id' => ['required', 'uuid'],
+                'month' => ['required', 'date_format:Y-m'],
+                'amount' => ['required', 'integer'],
+            ],
+            'targets' => [
+                'category_id' => ['required', 'uuid'],
+                'type' => ['required', 'in:monthly,by_date,refill'],
+                'amount' => ['required', 'integer', 'min:0'],
+                'due_month' => ['nullable', 'date_format:Y-m'],
             ],
             default => [],
         };

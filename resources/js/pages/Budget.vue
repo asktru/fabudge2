@@ -19,7 +19,7 @@ const sync = new SyncEngine(db, {
     pullUrl: pull.url(teamSlug),
 });
 
-const current = ref<BudgetView>({ view: 'register', accountId: null });
+const current = ref<BudgetView>({ view: 'plan' });
 
 provideBudget({
     db,

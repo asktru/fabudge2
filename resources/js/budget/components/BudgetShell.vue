@@ -9,6 +9,7 @@ import AccountFormDialog from './AccountFormDialog.vue';
 import BudgetSidebar from './BudgetSidebar.vue';
 import ManageCategories from './ManageCategories.vue';
 import ManagePayees from './ManagePayees.vue';
+import PlanView from './PlanView.vue';
 import RegisterView from './RegisterView.vue';
 
 const { db, current, sync } = useBudget();
@@ -19,13 +20,17 @@ const editingAccount = ref<Account | null>(null);
 const accounts = useLive<Account[]>(() => db.accounts.toArray(), []);
 
 const title = computed(() => {
+    if (current.value.view === 'plan') {
+        return 'Plan';
+    }
+
     if (current.value.view === 'categories') {
-return 'Categories';
-}
+        return 'Categories';
+    }
 
     if (current.value.view === 'payees') {
-return 'Payees';
-}
+        return 'Payees';
+    }
 
     const accountId = current.value.accountId;
 
@@ -70,6 +75,7 @@ function openAccountDialog(account: Account | null) {
                     :account-id="current.accountId"
                     @edit-account="openAccountDialog($event)"
                 />
+                <PlanView v-else-if="current.view === 'plan'" />
                 <ManageCategories v-else-if="current.view === 'categories'" />
                 <ManagePayees v-else-if="current.view === 'payees'" />
             </main>
