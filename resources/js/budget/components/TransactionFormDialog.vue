@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3';
+import { Mic } from '@lucide/vue';
 import { useGeolocation, useMediaQuery } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 import { today } from '@/budget/clock';
 import { useBudget } from '@/budget/context';
+import { parseDictation  } from '@/budget/dictation';
+import type {ParsedDictation} from '@/budget/dictation';
 import { hasNearbyAssociation, nearbyPayeeIds  } from '@/budget/locations';
 import type {Coordinates} from '@/budget/locations';
 import { formatAmount } from '@/budget/money';
@@ -18,6 +22,7 @@ import {
 import type {PayeeSelection, TransactionFormState} from '@/budget/transactionFormModel';
 import type { Account, Category, Payee, PayeeLocation, Transaction } from '@/budget/types';
 import { useLive } from '@/budget/useLive';
+import { useSpeech } from '@/budget/useSpeech';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,6 +30,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { parse as dictationParse } from '@/routes/dictation';
 import MoneyInput from './MoneyInput.vue';
 import SimpleCombobox from './SimpleCombobox.vue';
 import type {ComboboxItem} from './SimpleCombobox.vue';
@@ -58,6 +64,84 @@ const currentCoords = computed<Coordinates | null>(() => {
 });
 
 const rememberLocation = ref(false);
+
+// ——— Voice dictation ———
+
+const page = usePage();
+const dictating = ref(false);
+
+const speech = useSpeech((transcript) => {
+    void applyDictation(transcript);
+});
+
+async function applyDictation(transcript: string) {
+    dictating.value = true;
+
+    try {
+        const teamSlug = page.props.currentTeam!.slug;
+        const parsed = await parseDictation(
+            transcript,
+            {
+                accounts: liveAccounts.value.map((account) => account.name),
+                categories: categories.value.filter((category) => category.deleted_at === null).map((category) => category.name),
+                payees: payees.value.filter((payee) => payee.deleted_at === null).map((payee) => payee.name),
+                today: today(),
+            },
+            dictationParse.url(teamSlug),
+        );
+
+        if (parsed) {
+            fillFromDictation(parsed);
+        }
+    } finally {
+        dictating.value = false;
+    }
+}
+
+function fillFromDictation(parsed: ParsedDictation) {
+    if (parsed.type === 'expense') {
+        state.value.outflowMinor = parsed.amountMinor;
+        state.value.inflowMinor = null;
+    } else {
+        state.value.inflowMinor = parsed.amountMinor;
+        state.value.outflowMinor = null;
+    }
+
+    if (parsed.account) {
+        const account = liveAccounts.value.find((candidate) => candidate.name.toLowerCase() === parsed.account!.toLowerCase());
+
+        if (account) {
+            state.value.accountId = account.id;
+        }
+    }
+
+    if (parsed.payee) {
+        const known = payees.value.find(
+            (candidate) => candidate.deleted_at === null && candidate.name.toLowerCase() === parsed.payee!.toLowerCase(),
+        );
+        state.value.payee = known ? { kind: 'payee', id: known.id, name: known.name } : { kind: 'payee', id: null, name: parsed.payee };
+        payeeText.value = known?.name ?? parsed.payee;
+    }
+
+    if (parsed.category) {
+        const category = categories.value.find(
+            (candidate) => candidate.deleted_at === null && candidate.name.toLowerCase() === parsed.category!.toLowerCase(),
+        );
+
+        if (category) {
+            state.value.categoryId = category.id;
+            categoryText.value = category.name;
+        }
+    }
+
+    if (parsed.date) {
+        state.value.date = parsed.date;
+    }
+
+    if (parsed.memo) {
+        state.value.memo = parsed.memo;
+    }
+}
 
 const canRememberLocation = computed(
     () =>
@@ -499,10 +583,26 @@ function onInflowChange(value: number | null) {
     <component :is="isDesktop ? Dialog : Sheet" v-model:open="open">
         <component :is="isDesktop ? DialogContent : SheetContent" :side="isDesktop ? undefined : 'bottom'" class="sm:max-w-lg" :class="isDesktop ? '' : 'max-h-[90dvh] overflow-y-auto pb-6'">
             <component :is="isDesktop ? DialogHeader : SheetHeader">
-                <component :is="isDesktop ? DialogTitle : SheetTitle">
+                <component :is="isDesktop ? DialogTitle : SheetTitle" class="flex items-center gap-2">
                     {{ transaction ? 'Edit transaction' : 'Add transaction' }}
+                    <button
+                        v-if="speech.supported && !transaction"
+                        type="button"
+                        class="inline-flex size-7 items-center justify-center rounded-full transition-colors"
+                        :class="speech.listening.value ? 'animate-pulse bg-red-500/15 text-red-500' : 'text-muted-foreground hover:bg-accent hover:text-foreground'"
+                        :title="speech.listening.value ? 'Stop dictation' : 'Dictate transaction'"
+                        data-testid="txn-dictate"
+                        @click="speech.listening.value ? speech.stop() : speech.start()"
+                    >
+                        <Mic class="size-4" />
+                    </button>
+                    <span v-if="dictating" class="text-xs font-normal text-muted-foreground">Parsing…</span>
                 </component>
             </component>
+
+            <p v-if="speech.interim.value" class="rounded-md bg-muted px-3 py-1.5 text-sm text-muted-foreground" :class="isDesktop ? '' : 'mx-4'">
+                “{{ speech.interim.value }}”
+            </p>
 
             <form class="space-y-4" :class="isDesktop ? '' : 'px-4'" @submit.prevent="save">
                 <div class="grid grid-cols-2 gap-4">

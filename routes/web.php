@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DictationController;
 use App\Http\Controllers\SyncController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -15,6 +16,7 @@ Route::prefix('{current_team}')
         Route::inertia('budget', 'Budget')->name('budget');
         Route::post('sync/push', [SyncController::class, 'push'])->name('sync.push');
         Route::get('sync/pull', [SyncController::class, 'pull'])->name('sync.pull');
+        Route::post('dictation/parse', [DictationController::class, 'parse'])->name('dictation.parse');
     });
 
 Route::middleware(['auth'])->group(function () {
