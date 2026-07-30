@@ -6,6 +6,7 @@ import type { Account } from '@/budget/types';
 import { useLive } from '@/budget/useLive';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import AccountFormDialog from './AccountFormDialog.vue';
+import AnalyticsView from './AnalyticsView.vue';
 import BudgetSidebar from './BudgetSidebar.vue';
 import ManageCategories from './ManageCategories.vue';
 import ManagePayees from './ManagePayees.vue';
@@ -22,6 +23,10 @@ const accounts = useLive<Account[]>(() => db.accounts.toArray(), []);
 const title = computed(() => {
     if (current.value.view === 'plan') {
         return 'Plan';
+    }
+
+    if (current.value.view === 'analytics') {
+        return 'Analytics';
     }
 
     if (current.value.view === 'categories') {
@@ -76,6 +81,7 @@ function openAccountDialog(account: Account | null) {
                     @edit-account="openAccountDialog($event)"
                 />
                 <PlanView v-else-if="current.view === 'plan'" />
+                <AnalyticsView v-else-if="current.view === 'analytics'" />
                 <ManageCategories v-else-if="current.view === 'categories'" />
                 <ManagePayees v-else-if="current.view === 'payees'" />
             </main>
