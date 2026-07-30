@@ -12,6 +12,7 @@ Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
+        Route::inertia('budget', 'Budget')->name('budget');
         Route::post('sync/push', [SyncController::class, 'push'])->name('sync.push');
         Route::get('sync/pull', [SyncController::class, 'pull'])->name('sync.pull');
     });

@@ -12,6 +12,7 @@ createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name === 'Welcome':
+            case name === 'Budget': // the budget SPA brings its own shell
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
