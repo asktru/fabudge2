@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 42">
-    <!-- Fabudge: a coin dropping into an envelope -->
-    <path fill="#d97706" d="M20 2a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Z"/>
-    <path fill="#3b82f6" fill-rule="evenodd" clip-rule="evenodd" d="M8 16h24a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V20a4 4 0 0 1 4-4Zm-4 1.8 16 12.4 16-12.4V21L20 33.4 4 21v-3.2Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+    <!-- Fabudge: an F built from budget bars -->
+    <path fill="#3b82f6" d="M9 7.5A3.5 3.5 0 0 1 12.5 4h20a3.5 3.5 0 1 1 0 7H16v21.5a3.5 3.5 0 1 1-7 0V7.5Z"/>
+    <path fill="#d97706" d="M16 17h9.5a3.5 3.5 0 1 1 0 7H16v-7Z"/>
 </svg>

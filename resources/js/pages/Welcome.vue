@@ -49,9 +49,7 @@ const features = [
         <header class="mx-auto w-full max-w-5xl px-6 py-6 lg:px-8">
             <nav class="flex items-center justify-between gap-4 text-sm">
                 <div class="flex items-center gap-2">
-                    <AppLogoIcon
-                        class="size-6 fill-current text-amber-600 dark:text-amber-500"
-                    />
+                    <AppLogoIcon class="size-6 fill-current text-foreground" />
                     <span class="text-base font-semibold tracking-tight"
                         >fabudge</span
                     >
