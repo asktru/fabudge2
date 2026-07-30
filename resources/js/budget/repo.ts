@@ -1,4 +1,4 @@
-import { nowMs } from './clock';
+import { nowMs, today } from './clock';
 import type { BudgetDatabase } from './db';
 import { newId } from './ids';
 import type { Account, AccountType, Category, CategoryGroup, ClearedStatus, Payee, SyncTableName, Transaction } from './types';
@@ -38,6 +38,24 @@ export interface CreateTransferInput {
     clearedFrom?: ClearedStatus;
     clearedTo?: ClearedStatus;
 }
+
+export interface SplitLine {
+    category_id: string | null;
+    /** Signed minor units, like a plain transaction amount. */
+    amountMinor: number;
+}
+
+export interface CreateSplitInput {
+    account_id: string;
+    date: string;
+    payee_id?: string | null;
+    payeeName?: string | null;
+    memo?: string | null;
+    cleared?: ClearedStatus;
+    lines: SplitLine[];
+}
+
+export const RECONCILIATION_PAYEE = 'Reconciliation adjustment';
 
 /**
  * All local mutations. Every write stamps a fresh `updated_at` and enqueues
@@ -102,7 +120,7 @@ export function createRepo(db: BudgetDatabase) {
                     const transaction: Transaction = {
                         id: newId(),
                         account_id: account.id,
-                        date: input.startingDate ?? new Date().toISOString().slice(0, 10),
+                        date: input.startingDate ?? today(),
                         amount: input.startingBalanceMinor,
                         payee_id: payee.id,
                         category_id: null,
@@ -245,21 +263,168 @@ allowed.cleared = patch.cleared;
             });
         },
 
-        /** Deleting one leg of a transfer tombstones both. */
+        /** Deleting one leg of a transfer (or one member of a split) tombstones the whole set. */
         async deleteTransaction(id: string): Promise<void> {
             await db.transaction('rw', [db.transactions, db.outbox], async () => {
                 const transaction = await db.transactions.get(id);
 
                 if (!transaction) {
-throw new Error(`Transaction ${id} not found`);
-}
+                    throw new Error(`Transaction ${id} not found`);
+                }
 
                 const stamp = nowMs();
-                const rows = transaction.transfer_pair_id
-                    ? await db.transactions.where('transfer_pair_id').equals(transaction.transfer_pair_id).toArray()
-                    : [transaction];
+                let rows = [transaction];
+
+                if (transaction.transfer_pair_id) {
+                    rows = await db.transactions.where('transfer_pair_id').equals(transaction.transfer_pair_id).toArray();
+                } else if (transaction.split_group_id) {
+                    rows = await db.transactions.where('split_group_id').equals(transaction.split_group_id).toArray();
+                }
 
                 await put('transactions', rows.map((row) => ({ ...row, deleted_at: stamp })));
+            });
+        },
+
+        /** One purchase split across categories: N rows sharing a split_group_id. */
+        async createSplit(input: CreateSplitInput): Promise<Transaction[]> {
+            if (input.lines.length < 2) {
+                throw new Error('A split needs at least two lines');
+            }
+
+            if (input.lines.some((line) => line.amountMinor === 0)) {
+                throw new Error('Split lines cannot be zero');
+            }
+
+            return db.transaction('rw', [db.transactions, db.payees, db.outbox], async () => {
+                const payeeId = input.payee_id ?? (input.payeeName ? (await resolvePayee(input.payeeName)).id : null);
+                const groupId = newId();
+
+                const rows: Transaction[] = input.lines.map((line) => ({
+                    id: newId(),
+                    account_id: input.account_id,
+                    date: input.date,
+                    amount: line.amountMinor,
+                    payee_id: payeeId,
+                    category_id: line.category_id,
+                    memo: input.memo ?? null,
+                    cleared: input.cleared ?? 'uncleared',
+                    transfer_pair_id: null,
+                    split_group_id: groupId,
+                    updated_at: nowMs(),
+                    deleted_at: null,
+                }));
+
+                await put('transactions', rows);
+
+                return rows;
+            });
+        },
+
+        /** Apply shared-field changes (date, memo, payee, cleared) to every live member. */
+        async updateSplitGroup(
+            groupId: string,
+            patch: Partial<Pick<Transaction, 'date' | 'memo' | 'payee_id' | 'cleared'>>,
+        ): Promise<void> {
+            await db.transaction('rw', [db.transactions, db.outbox], async () => {
+                const members = (await db.transactions.where('split_group_id').equals(groupId).toArray()).filter(
+                    (member) => member.deleted_at === null,
+                );
+
+                await put('transactions', members.map((member) => ({ ...member, ...patch })));
+            });
+        },
+
+        /**
+         * Rewrite a split's lines. Existing members are reused by position,
+         * surplus members are tombstoned, extra lines become new rows. A
+         * single remaining line converts back to a plain transaction.
+         */
+        async replaceSplitLines(groupId: string, lines: SplitLine[]): Promise<void> {
+            if (lines.length === 0) {
+                throw new Error('A split needs at least one line');
+            }
+
+            if (lines.some((line) => line.amountMinor === 0)) {
+                throw new Error('Split lines cannot be zero');
+            }
+
+            await db.transaction('rw', [db.transactions, db.outbox], async () => {
+                const members = (await db.transactions.where('split_group_id').equals(groupId).toArray())
+                    .filter((member) => member.deleted_at === null)
+                    .sort((a, b) => a.id.localeCompare(b.id));
+
+                if (members.length === 0) {
+                    throw new Error(`Split group ${groupId} not found`);
+                }
+
+                const template = members[0];
+                const stamp = nowMs();
+                const updates: Transaction[] = [];
+
+                lines.forEach((line, index) => {
+                    const reused = members[index];
+                    const base = reused ?? {
+                        ...template,
+                        id: newId(),
+                    };
+
+                    updates.push({
+                        ...base,
+                        amount: line.amountMinor,
+                        category_id: line.category_id,
+                        split_group_id: lines.length === 1 ? null : groupId,
+                    });
+                });
+
+                for (const surplus of members.slice(lines.length)) {
+                    updates.push({ ...surplus, deleted_at: stamp });
+                }
+
+                await put('transactions', updates);
+            });
+        },
+
+        /**
+         * Finish reconciling an account: create an adjustment for any
+         * remaining difference, then mark every cleared transaction
+         * reconciled. Returns the adjustment transaction, if one was needed.
+         */
+        async finishReconciliation(accountId: string, actualClearedMinor: number): Promise<Transaction | null> {
+            return db.transaction('rw', [db.transactions, db.payees, db.outbox], async () => {
+                const rows = (await db.transactions.where('account_id').equals(accountId).toArray()).filter(
+                    (transaction) => transaction.deleted_at === null,
+                );
+
+                const clearedBalance = rows
+                    .filter((transaction) => transaction.cleared !== 'uncleared')
+                    .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+                const difference = actualClearedMinor - clearedBalance;
+                let adjustment: Transaction | null = null;
+
+                if (difference !== 0) {
+                    const payee = await resolvePayee(RECONCILIATION_PAYEE);
+                    adjustment = {
+                        id: newId(),
+                        account_id: accountId,
+                        date: today(),
+                        amount: difference,
+                        payee_id: payee.id,
+                        category_id: null,
+                        memo: null,
+                        cleared: 'cleared',
+                        transfer_pair_id: null,
+                        split_group_id: null,
+                        updated_at: nowMs(),
+                        deleted_at: null,
+                    };
+                    await put('transactions', [adjustment]);
+                }
+
+                const toReconcile = [...rows.filter((transaction) => transaction.cleared === 'cleared'), ...(adjustment ? [adjustment] : [])];
+                await put('transactions', toReconcile.map((transaction) => ({ ...transaction, cleared: 'reconciled' as const })));
+
+                return adjustment;
             });
         },
 
