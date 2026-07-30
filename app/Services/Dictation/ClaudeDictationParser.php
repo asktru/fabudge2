@@ -35,7 +35,7 @@ class ClaudeDictationParser implements DictationParser
         $message = $client->messages->create(
             maxTokens: 1024,
             messages: [['role' => 'user', 'content' => $prompt]],
-            model: 'claude-opus-5',
+            model: 'claude-haiku-4-5',
             outputConfig: ['format' => ParsedDictation::class],
         );
 
