@@ -640,6 +640,15 @@ throw new Error(`Category group ${id} not found`);
             });
         },
 
+        /** Associate the payee with a geographic spot (dedupe handled by the caller). */
+        async addPayeeLocation(payeeId: string, latitude: number, longitude: number): Promise<void> {
+            await db.transaction('rw', [db.payee_locations, db.outbox], async () => {
+                await put('payee_locations', [
+                    { id: newId(), payee_id: payeeId, latitude, longitude, updated_at: nowMs(), deleted_at: null },
+                ]);
+            });
+        },
+
         async renamePayee(id: string, name: string): Promise<void> {
             await db.transaction('rw', [db.payees, db.outbox], async () => {
                 const payee = await db.payees.get(id);
