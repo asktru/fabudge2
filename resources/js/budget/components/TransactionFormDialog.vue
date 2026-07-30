@@ -3,6 +3,9 @@ import { useMediaQuery } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 import { today } from '@/budget/clock';
 import { useBudget } from '@/budget/context';
+import { formatAmount } from '@/budget/money';
+import type { SplitLine } from '@/budget/repo';
+import { suggestCategory } from '@/budget/suggestions';
 import {
     buildSubmission,
     emptyFormState,
@@ -50,6 +53,54 @@ const error = ref<string | null>(null);
 const saving = ref(false);
 
 const editingTransfer = computed(() => props.transaction?.transfer_pair_id != null);
+const editingSplit = computed(() => props.transaction?.split_group_id != null);
+
+interface SplitLineDraft {
+    categoryId: string | null;
+    categoryText: string;
+    /** Positive minor units; sign comes from the outflow/inflow choice. */
+    amountMinor: number | null;
+}
+
+const splitMode = ref(false);
+const splitLines = ref<SplitLineDraft[]>([]);
+
+const splitMembers = computed(() =>
+    props.transaction?.split_group_id
+        ? transactions.value
+              .filter((candidate) => candidate.split_group_id === props.transaction!.split_group_id && candidate.deleted_at === null)
+              .sort((a, b) => a.id.localeCompare(b.id))
+        : [],
+);
+
+const splitTotalMinor = computed(() => state.value.outflowMinor ?? state.value.inflowMinor ?? 0);
+
+const splitAssignedMinor = computed(() => splitLines.value.reduce((sum, line) => sum + (line.amountMinor ?? 0), 0));
+
+const splitRemainderMinor = computed(() => splitTotalMinor.value - splitAssignedMinor.value);
+
+function enterSplitMode() {
+    splitMode.value = true;
+
+    if (splitLines.value.length === 0) {
+        splitLines.value = [
+            { categoryId: state.value.categoryId, categoryText: categoryText.value, amountMinor: splitTotalMinor.value || null },
+            { categoryId: null, categoryText: '', amountMinor: null },
+        ];
+    }
+}
+
+function addSplitLine() {
+    splitLines.value.push({ categoryId: null, categoryText: '', amountMinor: splitRemainderMinor.value > 0 ? splitRemainderMinor.value : null });
+}
+
+function removeSplitLine(index: number) {
+    splitLines.value.splice(index, 1);
+
+    if (splitLines.value.length === 0) {
+        splitMode.value = false;
+    }
+}
 
 const selectedAccount = computed(() => liveAccounts.value.find((account) => account.id === state.value.accountId) ?? null);
 const currency = computed(() => selectedAccount.value?.currency ?? 'CAD');
@@ -101,6 +152,8 @@ watch(open, (isOpen) => {
     }
 
     error.value = null;
+    splitMode.value = false;
+    splitLines.value = [];
 
     if (props.transaction) {
         const transaction = props.transaction;
@@ -130,6 +183,19 @@ watch(open, (isOpen) => {
         };
         payeeText.value = label;
         categoryText.value = categories.value.find((category) => category.id === transaction.category_id)?.name ?? '';
+
+        if (transaction.split_group_id) {
+            const members = splitMembers.value;
+            const total = members.reduce((sum, member) => sum + member.amount, 0);
+            state.value.outflowMinor = total < 0 ? -total : null;
+            state.value.inflowMinor = total > 0 ? total : null;
+            splitMode.value = true;
+            splitLines.value = members.map((member) => ({
+                categoryId: member.category_id,
+                categoryText: categories.value.find((category) => category.id === member.category_id)?.name ?? '',
+                amountMinor: Math.abs(member.amount),
+            }));
+        }
     } else {
         state.value = emptyFormState(props.defaultAccountId ?? liveAccounts.value[0]?.id ?? null, today());
         payeeText.value = '';
@@ -146,6 +212,16 @@ function onPayeeSelect(item: ComboboxItem) {
         categoryText.value = '';
     } else {
         state.value.payee = { kind: 'payee', id, name: item.label };
+
+        // Convenience: prefill the category from this payee's latest use.
+        if (state.value.categoryId === null && !splitMode.value) {
+            const suggested = suggestCategory(id, transactions.value);
+
+            if (suggested) {
+                state.value.categoryId = suggested;
+                categoryText.value = categories.value.find((category) => category.id === suggested)?.name ?? '';
+            }
+        }
     }
 }
 
@@ -164,8 +240,65 @@ function onPayeeTextChange(value: string) {
     }
 }
 
+/** Validate split lines against the entered total; returns signed lines or an error. */
+function buildSplitLines(minLines = 2): SplitLine[] | { error: string } {
+    if (splitTotalMinor.value <= 0) {
+        return { error: 'Enter the total amount' };
+    }
+
+    const lines = splitLines.value.filter((line) => line.amountMinor !== null && line.amountMinor !== 0);
+
+    if (lines.length < minLines) {
+        return { error: 'A split needs at least two lines' };
+    }
+
+    if (splitRemainderMinor.value !== 0) {
+        return { error: `Split lines must add up to the total (${formatAmount(splitRemainderMinor.value, currency.value)} left)` };
+    }
+
+    const sign = state.value.outflowMinor !== null ? -1 : 1;
+
+    return lines.map((line) => ({ category_id: line.categoryId, amountMinor: sign * line.amountMinor! }));
+}
+
 async function save() {
     error.value = null;
+
+    if (splitMode.value && !props.transaction) {
+        const lines = buildSplitLines();
+
+        if ('error' in lines) {
+            error.value = lines.error;
+
+            return;
+        }
+
+        if (state.value.accountId === null) {
+            error.value = 'Choose an account';
+
+            return;
+        }
+
+        saving.value = true;
+
+        try {
+            const payee = state.value.payee;
+            await repo.createSplit({
+                account_id: state.value.accountId,
+                date: state.value.date,
+                payee_id: payee?.kind === 'payee' ? payee.id : null,
+                payeeName: payee?.kind === 'payee' && payee.id === null ? payee.name : null,
+                memo: state.value.memo || null,
+                cleared: state.value.cleared ? 'cleared' : 'uncleared',
+                lines,
+            });
+            open.value = false;
+        } finally {
+            saving.value = false;
+        }
+
+        return;
+    }
 
     if (props.transaction) {
         await saveEdit();
@@ -198,6 +331,38 @@ async function save() {
 
 async function saveEdit() {
     const transaction = props.transaction!;
+
+    if (transaction.split_group_id) {
+        const lines = buildSplitLines(1);
+
+        if ('error' in lines) {
+            error.value = lines.error;
+
+            return;
+        }
+
+        saving.value = true;
+
+        try {
+            const payee = state.value.payee;
+            const payeeId =
+                payee?.kind === 'payee' ? (payee.id ?? (payee.name ? (await repo.resolvePayee(payee.name)).id : null)) : null;
+
+            await repo.updateSplitGroup(transaction.split_group_id, {
+                date: state.value.date,
+                memo: state.value.memo || null,
+                payee_id: payeeId,
+                cleared: state.value.cleared ? 'cleared' : 'uncleared',
+            });
+            await repo.replaceSplitLines(transaction.split_group_id, lines);
+            open.value = false;
+        } finally {
+            saving.value = false;
+        }
+
+        return;
+    }
+
     const amount = state.value.outflowMinor ? -state.value.outflowMinor : state.value.inflowMinor;
 
     if (!amount) {
@@ -324,8 +489,19 @@ function onInflowChange(value: number | null) {
                     />
                 </div>
 
-                <div v-if="state.payee?.kind !== 'transfer'" class="grid gap-2">
-                    <Label for="txn-category">Category</Label>
+                <div v-if="state.payee?.kind !== 'transfer' && !splitMode" class="grid gap-2">
+                    <div class="flex items-center justify-between">
+                        <Label for="txn-category">Category</Label>
+                        <button
+                            v-if="!editingTransfer"
+                            type="button"
+                            class="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                            data-testid="txn-split-toggle"
+                            @click="enterSplitMode"
+                        >
+                            Split into categories
+                        </button>
+                    </div>
                     <SimpleCombobox
                         id="txn-category"
                         v-model="categoryText"
@@ -335,6 +511,39 @@ function onInflowChange(value: number | null) {
                         @select="(item) => (state.categoryId = item.value)"
                         @update:model-value="(value) => { if (!value.trim()) state.categoryId = null; }"
                     />
+                </div>
+
+                <div v-if="splitMode" class="space-y-2 rounded-md border p-3">
+                    <div class="flex items-center justify-between text-sm font-medium">
+                        <span>Split{{ editingSplit ? ` (${splitLines.length} lines)` : '' }}</span>
+                        <span
+                            class="text-xs tabular-nums"
+                            :class="splitRemainderMinor === 0 ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-500'"
+                            data-testid="split-remainder"
+                        >
+                            {{ formatAmount(splitRemainderMinor, currency) }} left to assign
+                        </span>
+                    </div>
+
+                    <div v-for="(line, index) in splitLines" :key="index" class="flex items-center gap-2">
+                        <div class="flex-1">
+                            <SimpleCombobox
+                                v-model="line.categoryText"
+                                :items="categoryItems"
+                                placeholder="Category"
+                                @select="(item) => (line.categoryId = item.value)"
+                                @update:model-value="(value) => { if (!value.trim()) line.categoryId = null; }"
+                            />
+                        </div>
+                        <div class="w-28">
+                            <MoneyInput v-model="line.amountMinor" :currency="currency" sign="positive" />
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" class="size-8 shrink-0" @click="removeSplitLine(index)">✕</Button>
+                    </div>
+
+                    <Button type="button" variant="secondary" size="sm" data-testid="split-add-line" @click="addSplitLine">
+                        Add line
+                    </Button>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">

@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { openBudgetDatabase } from '@/budget/db';
 import type { BudgetDatabase } from '@/budget/db';
+import { groupRegisterRows } from '@/budget/registerRows';
 import { createRepo, RECONCILIATION_PAYEE } from '@/budget/repo';
 import type { Repo } from '@/budget/repo';
-import { groupRegisterRows } from '@/budget/registerRows';
 import { suggestCategory } from '@/budget/suggestions';
 import type { Transaction } from '@/budget/types';
 
