@@ -297,8 +297,10 @@ function rowKey(row: RegisterRow): string {
                     <Pencil class="size-4" />
                     <span class="hidden sm:inline">Edit account</span>
                 </Button>
+                <!-- On mobile the shell's floating button covers this. -->
                 <Button
                     size="sm"
+                    class="hidden md:inline-flex"
                     data-testid="add-transaction"
                     @click="openAdd"
                 >

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { CloudAlert, CloudOff, RefreshCw } from '@lucide/vue';
+import { CloudAlert, CloudOff, Plus, RefreshCw } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { useBudget } from '@/budget/context';
+import { quickAddAccountId } from '@/budget/navigation';
 import type { Account } from '@/budget/types';
 import { useLive } from '@/budget/useLive';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
@@ -13,11 +14,16 @@ import ManageCategories from './ManageCategories.vue';
 import ManagePayees from './ManagePayees.vue';
 import PlanView from './PlanView.vue';
 import RegisterView from './RegisterView.vue';
+import TransactionFormDialog from './TransactionFormDialog.vue';
 
 const { db, current, sync } = useBudget();
 
 const accountDialogOpen = ref(false);
 const editingAccount = ref<Account | null>(null);
+
+// Quick add lives in the shell so the mobile FAB works from every tab.
+const quickAddOpen = ref(false);
+const quickAddAccount = computed(() => quickAddAccountId(current.value));
 
 const accounts = useLive<Account[]>(() => db.accounts.toArray(), []);
 
@@ -87,9 +93,21 @@ function openAccountDialog(account: Account | null) {
                 <ManagePayees v-else-if="current.view === 'payees'" />
             </main>
 
+            <button
+                type="button"
+                class="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
+                aria-label="Add transaction"
+                data-testid="quick-add"
+                @click="quickAddOpen = true"
+            >
+                <Plus class="size-6" />
+            </button>
+
             <BudgetTabBar />
         </SidebarInset>
 
         <AccountFormDialog v-model:open="accountDialogOpen" :account="editingAccount" />
+
+        <TransactionFormDialog v-model:open="quickAddOpen" :default-account-id="quickAddAccount" :transaction="null" />
     </SidebarProvider>
 </template>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BudgetView } from '@/budget/context';
-import { activeTabId, budgetTabs } from '@/budget/navigation';
+import { activeTabId, budgetTabs, quickAddAccountId } from '@/budget/navigation';
 
 describe('budgetTabs', () => {
     it('exposes Plan, Spending and Reflect in order', () => {
@@ -19,6 +19,26 @@ describe('budgetTabs', () => {
     it('highlights the tab it navigates to', () => {
         for (const tab of budgetTabs) {
             expect(activeTabId(tab.view)).toBe(tab.id);
+        }
+    });
+});
+
+describe('quickAddAccountId', () => {
+    it('preselects the account whose register is open', () => {
+        expect(quickAddAccountId({ view: 'register', accountId: 'acc-1' })).toBe('acc-1');
+    });
+
+    it('preselects nothing outside a single-account register', () => {
+        const views: BudgetView[] = [
+            { view: 'plan' },
+            { view: 'analytics' },
+            { view: 'register', accountId: null },
+            { view: 'categories' },
+            { view: 'payees' },
+        ];
+
+        for (const view of views) {
+            expect(quickAddAccountId(view)).toBeNull();
         }
     });
 });

@@ -31,6 +31,14 @@ export const budgetTabs: BudgetTab[] = [
  * Drilling into a single account keeps Spending highlighted: an account
  * register is a narrowed version of the same section.
  */
+/**
+ * The account a quick-add transaction should default to for the given view:
+ * the account whose register is open, and none anywhere else.
+ */
+export function quickAddAccountId(view: BudgetView): string | null {
+    return view.view === 'register' ? view.accountId : null;
+}
+
 export function activeTabId(view: BudgetView): BudgetTabId | null {
     switch (view.view) {
         case 'plan':
