@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { useMediaQuery } from '@vueuse/core';
+import { useGeolocation, useMediaQuery } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 import { today } from '@/budget/clock';
 import { useBudget } from '@/budget/context';
+import { hasNearbyAssociation, nearbyPayeeIds  } from '@/budget/locations';
+import type {Coordinates} from '@/budget/locations';
 import { formatAmount } from '@/budget/money';
 import type { SplitLine } from '@/budget/repo';
 import { suggestCategory } from '@/budget/suggestions';
@@ -14,7 +16,7 @@ import {
     
 } from '@/budget/transactionFormModel';
 import type {PayeeSelection, TransactionFormState} from '@/budget/transactionFormModel';
-import type { Account, Category, Payee, Transaction } from '@/budget/types';
+import type { Account, Category, Payee, PayeeLocation, Transaction } from '@/budget/types';
 import { useLive } from '@/budget/useLive';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -41,6 +43,29 @@ const isDesktop = useMediaQuery('(min-width: 640px)');
 
 const accounts = useLive<Account[]>(() => db.accounts.toArray(), []);
 const payees = useLive<Payee[]>(() => db.payees.toArray(), []);
+const payeeLocations = useLive<PayeeLocation[]>(() => db.payee_locations.toArray(), []);
+
+// Device position for location-aware payee suggestions; degrades silently
+// when permission is denied or unavailable.
+const geolocation = useGeolocation({ enableHighAccuracy: false, immediate: false });
+
+const currentCoords = computed<Coordinates | null>(() => {
+    const { latitude, longitude } = geolocation.coords.value;
+
+    return Number.isFinite(latitude) && Number.isFinite(longitude) && latitude !== 0
+        ? { latitude, longitude }
+        : null;
+});
+
+const rememberLocation = ref(false);
+
+const canRememberLocation = computed(
+    () =>
+        currentCoords.value !== null &&
+        state.value.payee?.kind === 'payee' &&
+        !props.transaction &&
+        (state.value.payee.id === null || !hasNearbyAssociation(state.value.payee.id, currentCoords.value, payeeLocations.value)),
+);
 const categories = useLive<Category[]>(() => db.categories.toArray(), []);
 const transactions = useLive<Transaction[]>(() => db.transactions.toArray(), []);
 
@@ -127,8 +152,19 @@ const payeeItems = computed<ComboboxItem[]>(() => {
         }
     }
 
-    const payeeEntries = payees.value
-        .filter((payee) => payee.deleted_at === null)
+    const livePayees = payees.value.filter((payee) => payee.deleted_at === null);
+
+    // Payees associated with a spot near the current position jump to the top.
+    const nearbyIds = currentCoords.value ? nearbyPayeeIds(currentCoords.value, payeeLocations.value) : [];
+    const nearbySet = new Set(nearbyIds);
+
+    const nearbyEntries = nearbyIds
+        .map((payeeId) => livePayees.find((payee) => payee.id === payeeId))
+        .filter((payee): payee is Payee => !!payee)
+        .map((payee) => ({ value: `payee:${payee.id}`, label: payee.name, group: '📍 Nearby' }));
+
+    const payeeEntries = livePayees
+        .filter((payee) => !nearbySet.has(payee.id))
         .sort((a, b) => (lastUse.get(b.id) ?? '').localeCompare(lastUse.get(a.id) ?? '') || a.name.localeCompare(b.name))
         .map((payee) => ({ value: `payee:${payee.id}`, label: payee.name, group: 'Payees' }));
 
@@ -136,7 +172,7 @@ const payeeItems = computed<ComboboxItem[]>(() => {
         .filter((account) => account.id !== state.value.accountId)
         .map((account) => ({ value: `transfer:${account.id}`, label: `Transfer: ${account.name}`, group: 'Transfers' }));
 
-    return [...transferEntries, ...payeeEntries];
+    return [...nearbyEntries, ...transferEntries, ...payeeEntries];
 });
 
 const categoryItems = computed<ComboboxItem[]>(() =>
@@ -154,6 +190,8 @@ watch(open, (isOpen) => {
     error.value = null;
     splitMode.value = false;
     splitLines.value = [];
+    rememberLocation.value = false;
+    geolocation.resume();
 
     if (props.transaction) {
         const transaction = props.transaction;
@@ -212,6 +250,7 @@ function onPayeeSelect(item: ComboboxItem) {
         categoryText.value = '';
     } else {
         state.value.payee = { kind: 'payee', id, name: item.label };
+        rememberLocation.value = canRememberLocation.value;
 
         // Convenience: prefill the category from this payee's latest use.
         if (state.value.categoryId === null && !splitMode.value) {
@@ -227,6 +266,18 @@ function onPayeeSelect(item: ComboboxItem) {
 
 function onPayeeCreate(name: string) {
     state.value.payee = { kind: 'payee', id: null, name };
+    rememberLocation.value = canRememberLocation.value;
+}
+
+/** After a successful save, persist the payee↔location association if requested. */
+async function maybeRememberLocation(payeeId: string | null) {
+    const coords = currentCoords.value;
+
+    if (!rememberLocation.value || !coords || !payeeId || hasNearbyAssociation(payeeId, coords, payeeLocations.value)) {
+        return;
+    }
+
+    await repo.addPayeeLocation(payeeId, coords.latitude, coords.longitude);
 }
 
 function onPayeeTextChange(value: string) {
@@ -283,7 +334,7 @@ async function save() {
 
         try {
             const payee = state.value.payee;
-            await repo.createSplit({
+            const rows = await repo.createSplit({
                 account_id: state.value.accountId,
                 date: state.value.date,
                 payee_id: payee?.kind === 'payee' ? payee.id : null,
@@ -292,6 +343,7 @@ async function save() {
                 cleared: state.value.cleared ? 'cleared' : 'uncleared',
                 lines,
             });
+            await maybeRememberLocation(rows[0]?.payee_id ?? null);
             open.value = false;
         } finally {
             saving.value = false;
@@ -320,7 +372,8 @@ async function save() {
         if (submission.kind === 'transfer') {
             await repo.createTransfer(submission.input);
         } else {
-            await repo.createTransaction(submission.input);
+            const created = await repo.createTransaction(submission.input);
+            await maybeRememberLocation(created.payee_id);
         }
 
         open.value = false;
@@ -590,6 +643,14 @@ function onInflowChange(value: number | null) {
                 <label class="flex items-center gap-2 text-sm">
                     <Checkbox v-model="state.cleared" data-testid="txn-cleared" />
                     Cleared
+                </label>
+
+                <label v-if="canRememberLocation" class="flex items-center gap-2 text-sm">
+                    <Checkbox v-model="rememberLocation" data-testid="txn-remember-location" />
+                    <span>
+                        Remember this location for
+                        <span class="font-medium">{{ state.payee?.kind === 'payee' ? state.payee.name : '' }}</span>
+                    </span>
                 </label>
 
                 <p v-if="error" class="text-sm text-destructive">{{ error }}</p>

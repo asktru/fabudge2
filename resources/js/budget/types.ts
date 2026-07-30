@@ -66,9 +66,23 @@ export interface Target extends Syncable {
     due_month: string | null;
 }
 
-export type SyncTableName = 'accounts' | 'category_groups' | 'categories' | 'payees' | 'transactions' | 'assignments' | 'targets';
+export interface PayeeLocation extends Syncable {
+    payee_id: string;
+    latitude: number;
+    longitude: number;
+}
 
-export type SyncableRow = Account | CategoryGroup | Category | Payee | Transaction | Assignment | Target;
+export type SyncTableName =
+    | 'accounts'
+    | 'category_groups'
+    | 'categories'
+    | 'payees'
+    | 'transactions'
+    | 'assignments'
+    | 'targets'
+    | 'payee_locations';
+
+export type SyncableRow = Account | CategoryGroup | Category | Payee | Transaction | Assignment | Target | PayeeLocation;
 
 export interface OutboxEntry {
     seq?: number;

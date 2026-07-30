@@ -7,6 +7,7 @@ use App\Models\Assignment;
 use App\Models\Category;
 use App\Models\CategoryGroup;
 use App\Models\Payee;
+use App\Models\PayeeLocation;
 use App\Models\SyncableModel;
 use App\Models\Target;
 use App\Models\Transaction;
@@ -26,6 +27,7 @@ class SyncTables
         'transactions' => Transaction::class,
         'assignments' => Assignment::class,
         'targets' => Target::class,
+        'payee_locations' => PayeeLocation::class,
     ];
 
     public static function isKnown(string $table): bool
@@ -77,6 +79,11 @@ class SyncTables
                 'cleared' => ['required', 'in:uncleared,cleared,reconciled'],
                 'transfer_pair_id' => ['nullable', 'uuid'],
                 'split_group_id' => ['nullable', 'uuid'],
+            ],
+            'payee_locations' => [
+                'payee_id' => ['required', 'uuid'],
+                'latitude' => ['required', 'numeric', 'between:-90,90'],
+                'longitude' => ['required', 'numeric', 'between:-180,180'],
             ],
             'assignments' => [
                 'category_id' => ['required', 'uuid'],
