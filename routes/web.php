@@ -13,6 +13,7 @@ Route::prefix('{current_team}')
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
         Route::post('sync/push', [SyncController::class, 'push'])->name('sync.push');
+        Route::get('sync/pull', [SyncController::class, 'pull'])->name('sync.pull');
     });
 
 Route::middleware(['auth'])->group(function () {
