@@ -12,4 +12,3 @@ tests/Fixtures/ynab/*.csv -text
 
 CHANGELOG.md export-ignore
 README.md export-ignore
-.github/workflows/browser-tests.yml export-ignore
