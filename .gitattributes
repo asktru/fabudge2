@@ -6,6 +6,10 @@
 *.md diff=markdown
 *.php diff=php
 
+# YNAB export fixtures are byte-for-byte copies of a real export, CRLF and all;
+# normalising their line endings would defeat what they exist to test.
+tests/Fixtures/ynab/*.csv -text
+
 CHANGELOG.md export-ignore
 README.md export-ignore
 .github/workflows/browser-tests.yml export-ignore

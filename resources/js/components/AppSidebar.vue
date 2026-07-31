@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid, Wallet } from '@lucide/vue';
+import { BookOpen, FolderGit2, LayoutGrid, Upload, Wallet } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -17,6 +17,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { budget, dashboard } from '@/routes';
+import { create as importCreate } from '@/routes/import';
 import type { NavItem } from '@/types';
 
 const page = usePage();
@@ -37,6 +38,11 @@ const mainNavItems = computed<NavItem[]>(() => [
                   title: 'Budget',
                   href: budget(page.props.currentTeam.slug).url,
                   icon: Wallet,
+              },
+              {
+                  title: 'Import from YNAB',
+                  href: importCreate(page.props.currentTeam.slug).url,
+                  icon: Upload,
               },
           ]
         : []),
