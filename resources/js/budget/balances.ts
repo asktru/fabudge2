@@ -64,3 +64,61 @@ export function totalInBase(
 
     return { totalMinor, missingRates: [...missingRates] };
 }
+
+export interface AccountSummary {
+    account: Account;
+    workingMinor: number;
+    clearedMinor: number;
+}
+
+export interface AccountGroup {
+    /** 'budget' holds on-budget accounts, 'tracking' the rest. */
+    id: 'budget' | 'tracking';
+    label: string;
+    accounts: AccountSummary[];
+    total: TotalInBase;
+}
+
+/**
+ * Build the accounts overview: live accounts in sidebar order, split into
+ * on-budget and tracking groups, each with its balances and group total.
+ *
+ * Empty groups are omitted so a budget without tracking accounts shows one
+ * plain list.
+ *
+ * @return array<int, AccountGroup>
+ */
+export function accountGroups(
+    accounts: Account[],
+    transactions: Transaction[],
+    rates: RateRow[],
+    base = 'CAD',
+): AccountGroup[] {
+    const balances = accountBalances(transactions);
+    const live = accounts
+        .filter((account) => account.deleted_at === null)
+        .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+
+    const groups: AccountGroup[] = [
+        { id: 'budget', label: 'Budget', accounts: [], total: { totalMinor: 0, missingRates: [] } },
+        { id: 'tracking', label: 'Tracking', accounts: [], total: { totalMinor: 0, missingRates: [] } },
+    ];
+
+    for (const account of live) {
+        const balance = balances[account.id] ?? { workingMinor: 0, clearedMinor: 0 };
+        const group = groups[account.on_budget ? 0 : 1];
+
+        group.accounts.push({ account, ...balance });
+    }
+
+    for (const group of groups) {
+        group.total = totalInBase(
+            balances,
+            group.accounts.map((summary) => summary.account),
+            rates,
+            base,
+        );
+    }
+
+    return groups.filter((group) => group.accounts.length > 0);
+}

@@ -8,6 +8,7 @@ import type { SyncEngine } from './sync';
 export type BudgetView =
     | { view: 'plan' }
     | { view: 'analytics' }
+    | { view: 'accounts' }
     | { view: 'register'; accountId: string | null }
     | { view: 'categories' }
     | { view: 'payees' };

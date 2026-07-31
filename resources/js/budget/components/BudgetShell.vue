@@ -7,6 +7,7 @@ import type { Account } from '@/budget/types';
 import { useLive } from '@/budget/useLive';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import AccountFormDialog from './AccountFormDialog.vue';
+import AccountsView from './AccountsView.vue';
 import AnalyticsView from './AnalyticsView.vue';
 import BudgetSidebar from './BudgetSidebar.vue';
 import BudgetTabBar from './BudgetTabBar.vue';
@@ -34,6 +35,10 @@ const title = computed(() => {
 
     if (current.value.view === 'analytics') {
         return 'Reflect';
+    }
+
+    if (current.value.view === 'accounts') {
+        return 'Accounts';
     }
 
     if (current.value.view === 'categories') {
@@ -88,6 +93,11 @@ function openAccountDialog(account: Account | null) {
                     @edit-account="openAccountDialog($event)"
                 />
                 <PlanView v-else-if="current.view === 'plan'" />
+                <AccountsView
+                    v-else-if="current.view === 'accounts'"
+                    @add-account="openAccountDialog(null)"
+                    @edit-account="openAccountDialog($event)"
+                />
                 <AnalyticsView v-else-if="current.view === 'analytics'" />
                 <ManageCategories v-else-if="current.view === 'categories'" />
                 <ManagePayees v-else-if="current.view === 'payees'" />

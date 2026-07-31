@@ -10,7 +10,8 @@ const active = computed(() => activeTabId(current.value));
 
 <template>
     <nav
-        class="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+        class="fixed inset-x-0 bottom-0 z-20 grid border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
+        :style="{ gridTemplateColumns: `repeat(${budgetTabs.length}, minmax(0, 1fr))` }"
         data-testid="budget-tab-bar"
     >
         <button

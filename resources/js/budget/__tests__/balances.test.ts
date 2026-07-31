@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { accountBalances, totalInBase } from '@/budget/balances';
+import { accountBalances, accountGroups, totalInBase } from '@/budget/balances';
 import type { Account, RateRow, Transaction } from '@/budget/types';
 
 function transaction(overrides: Partial<Transaction>): Transaction {
@@ -80,5 +80,52 @@ describe('totalInBase', () => {
         );
 
         expect(total.totalMinor).toBe(0);
+    });
+});
+
+describe('accountGroups', () => {
+    const rates: RateRow[] = [{ quote: 'USD', rate: 0.73, fetched_at: 1 }];
+
+    it('splits live accounts into budget and tracking, in sort order, with balances', () => {
+        const groups = accountGroups(
+            [
+                account({ id: 'a2', name: 'Savings', sort_order: 2 }),
+                account({ id: 'a1', name: 'Chequing', sort_order: 1 }),
+                account({ id: 'a3', name: 'Brokerage', on_budget: false, sort_order: 3 }),
+                account({ id: 'a4', name: 'Closed', sort_order: 4, deleted_at: 9 }),
+            ],
+            [
+                transaction({ account_id: 'a1', amount: 10000, cleared: 'cleared' }),
+                transaction({ account_id: 'a1', amount: -2500 }),
+                transaction({ account_id: 'a3', amount: 500 }),
+            ],
+            rates,
+        );
+
+        expect(groups.map((group) => group.id)).toEqual(['budget', 'tracking']);
+        expect(groups[0].accounts.map((summary) => summary.account.id)).toEqual(['a1', 'a2']);
+        expect(groups[0].accounts[0]).toMatchObject({ workingMinor: 7500, clearedMinor: 10000 });
+        expect(groups[0].accounts[1]).toMatchObject({ workingMinor: 0, clearedMinor: 0 });
+        expect(groups[1].accounts.map((summary) => summary.account.id)).toEqual(['a3']);
+    });
+
+    it('totals each group separately in the base currency', () => {
+        const groups = accountGroups(
+            [
+                account({ id: 'a1', currency: 'USD' }),
+                account({ id: 'a2', on_budget: false, sort_order: 1 }),
+            ],
+            [transaction({ account_id: 'a1', amount: 7300 }), transaction({ account_id: 'a2', amount: 400 })],
+            rates,
+        );
+
+        expect(groups[0].total.totalMinor).toBe(10000);
+        expect(groups[1].total.totalMinor).toBe(400);
+    });
+
+    it('omits groups with no accounts', () => {
+        const groups = accountGroups([account({ id: 'a1' })], [], rates);
+
+        expect(groups.map((group) => group.id)).toEqual(['budget']);
     });
 });

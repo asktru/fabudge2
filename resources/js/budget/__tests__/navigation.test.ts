@@ -4,10 +4,11 @@ import type { BudgetView } from '@/budget/context';
 import { activeTabId, budgetTabs, quickAddAccountId } from '@/budget/navigation';
 
 describe('budgetTabs', () => {
-    it('exposes Plan, Spending and Reflect in order', () => {
+    it('exposes Plan, Spending, Accounts and Reflect in order', () => {
         expect(budgetTabs.map((tab) => [tab.id, tab.label])).toEqual([
             ['plan', 'Plan'],
             ['spending', 'Spending'],
+            ['accounts', 'Accounts'],
             ['reflect', 'Reflect'],
         ]);
     });
@@ -33,6 +34,7 @@ describe('quickAddAccountId', () => {
             { view: 'plan' },
             { view: 'analytics' },
             { view: 'register', accountId: null },
+            { view: 'accounts' },
             { view: 'categories' },
             { view: 'payees' },
         ];
@@ -44,8 +46,12 @@ describe('quickAddAccountId', () => {
 });
 
 describe('activeTabId', () => {
-    it('keeps Spending active while drilled into a single account', () => {
-        expect(activeTabId({ view: 'register', accountId: 'acc-1' })).toBe('spending');
+    it('keeps Accounts active while drilled into a single account', () => {
+        expect(activeTabId({ view: 'register', accountId: 'acc-1' })).toBe('accounts');
+    });
+
+    it('keeps Spending active for the all-accounts register', () => {
+        expect(activeTabId({ view: 'register', accountId: null })).toBe('spending');
     });
 
     it('highlights nothing for management views', () => {
