@@ -1,0 +1,19 @@
+[Unit]
+Description=fabudge queue worker
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/fabudge/current
+# Team invitation notifications are the queued work today. --tries and --backoff
+# stop a failing mail server from burning through jobs.
+ExecStart=/usr/bin/php{{PHP_VERSION}} artisan queue:work --sleep=3 --tries=3 --backoff=10 --max-time=3600
+# queue:restart asks the worker to exit; systemd brings it back on new code.
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=multi-user.target

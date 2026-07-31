@@ -1,0 +1,9 @@
+[Unit]
+Description=fabudge nightly backup to Hetzner Storage Box
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/var/www/fabudge/backup.sh

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#
+# Deploys whatever lands on main. Other branches are accepted into the bare
+# repo but ignored, so you can push work in progress without shipping it.
+
+set -euo pipefail
+
+while read -r _oldrev newrev ref; do
+    if [[ "$ref" == "refs/heads/main" ]]; then
+        # git sets these for hooks; they confuse the checkout in deploy.sh.
+        unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH
+        /var/www/fabudge/deploy.sh "$newrev"
+    else
+        echo "==> $ref is not main; stored but not deployed"
+    fi
+done

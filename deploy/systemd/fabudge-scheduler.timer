@@ -1,0 +1,12 @@
+[Unit]
+Description=Run fabudge scheduled tasks every minute
+
+[Timer]
+# Laravel's scheduler expects to be invoked every minute and decides internally
+# what is actually due (expired invitations, rates:fetch).
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
