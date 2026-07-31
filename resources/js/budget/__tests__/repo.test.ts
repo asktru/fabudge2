@@ -171,6 +171,53 @@ describe('transfers', () => {
     });
 });
 
+describe('reorderAccounts', () => {
+    async function threeAccounts() {
+        return [
+            await repo.createAccount({ name: 'A', currency: 'CAD', type: 'cash', on_budget: true }),
+            await repo.createAccount({ name: 'B', currency: 'CAD', type: 'cash', on_budget: true }),
+            await repo.createAccount({ name: 'C', currency: 'CAD', type: 'cash', on_budget: true }),
+        ];
+    }
+
+    it('renumbers accounts into the given order', async () => {
+        const [a, b, c] = await threeAccounts();
+
+        await repo.reorderAccounts([c.id, a.id, b.id]);
+
+        const bySortOrder = (await db.accounts.orderBy('sort_order').toArray()).map((account) => account.name);
+
+        expect(bySortOrder).toEqual(['C', 'A', 'B']);
+    });
+
+    it('only writes the accounts whose position changed', async () => {
+        const [a, b, c] = await threeAccounts();
+        await db.outbox.clear();
+
+        await repo.reorderAccounts([a.id, c.id, b.id]);
+
+        expect((await outboxKeys()).sort()).toEqual([`accounts:${b.id}`, `accounts:${c.id}`].sort());
+    });
+
+    it('writes nothing when the order is unchanged', async () => {
+        const [a, b, c] = await threeAccounts();
+        await db.outbox.clear();
+
+        await repo.reorderAccounts([a.id, b.id, c.id]);
+
+        expect(await outboxKeys()).toEqual([]);
+    });
+
+    it('ignores ids that no longer exist', async () => {
+        const [a, b] = await threeAccounts();
+
+        await repo.reorderAccounts([b.id, 'gone', a.id]);
+
+        expect((await db.accounts.get(b.id))?.sort_order).toBe(0);
+        expect((await db.accounts.get(a.id))?.sort_order).toBe(2);
+    });
+});
+
 describe('closeAccount', () => {
     it('tombstones the account, its transactions, and pair legs in other accounts', async () => {
         const a = await repo.createAccount({ name: 'A', currency: 'CAD', type: 'cash', on_budget: true });

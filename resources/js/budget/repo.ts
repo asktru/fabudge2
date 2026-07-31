@@ -150,6 +150,28 @@ throw new Error(`Account ${id} not found`);
             });
         },
 
+        /**
+         * Renumber accounts so they land in the given order. Ids are the live
+         * accounts in their new order; only rows whose position actually moved
+         * are written, so an unchanged drop syncs nothing.
+         */
+        async reorderAccounts(orderedIds: string[]): Promise<void> {
+            await db.transaction('rw', [db.accounts, db.outbox], async () => {
+                const accounts = await db.accounts.bulkGet(orderedIds);
+                const moved = accounts
+                    .map((account, index) => ({ account, index }))
+                    .filter(
+                        (entry): entry is { account: Account; index: number } =>
+                            entry.account !== undefined && entry.account.sort_order !== entry.index,
+                    )
+                    .map((entry) => ({ ...entry.account, sort_order: entry.index }));
+
+                if (moved.length) {
+                    await put('accounts', moved);
+                }
+            });
+        },
+
         /** Closing an account tombstones it and every transaction in it (incl. transfer pair legs). */
         async closeAccount(id: string): Promise<void> {
             await db.transaction('rw', [db.accounts, db.transactions, db.outbox], async () => {
